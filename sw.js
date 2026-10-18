@@ -4,7 +4,7 @@
    مبنلمسش أي طلب لـ Supabase: البيانات بتتخزن من جوه التطبيق نفسه. */
 var CACHE = 'masrofy-shell-v1';
 var FILES = [
-  './', 'index.html', 'app.css', 'fonts.css', 'app.js', 'import.js', 'theme-init.js', 'config.js',
+  './', 'index.html', 'app.css', 'fonts.css', 'app.js', 'import.js', 'xlsx.js', 'theme-init.js', 'config.js',
   'vendor/supabase.js', 'manifest.webmanifest',
   'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png',
   'privacy.html', 'terms.html',

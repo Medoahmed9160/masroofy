@@ -252,3 +252,5 @@ td.nm{overflow-wrap:anywhere}
 .tblwrap th,.tblwrap td{padding:8px 10px;text-align:start;border-bottom:1px solid var(--line);white-space:nowrap}
 .tblwrap td.nm{max-width:140px;overflow:hidden;text-overflow:ellipsis}
 .themes .btn[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.topr{display:flex;align-items:center;gap:10px}
+.themebtn{width:44px;height:44px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;display:grid;place-items:center;flex:none}

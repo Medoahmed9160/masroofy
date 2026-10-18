@@ -26,11 +26,12 @@
     <button class="btn primary" data-act="add" type="button">+ حركة جديدة</button>
     <nav id="nav-d"></nav>
     <div class="sync" data-s="warn" id="sync-d"><i></i><span>بيتوصّل…</span></div>
+    <button class="themebtn" data-act="themecycle" type="button" aria-label="تبديل المظهر"></button>
   </aside>
   <div class="col">
     <header class="topbar">
       <div class="brand"><span class="mark" aria-hidden="true">م</span><span>دفتر مصروفي</span></div>
-      <div class="sync" data-s="warn" id="sync-m"><i></i><span>بيتوصّل…</span></div>
+      <div class="topr"><div class="sync" data-s="warn" id="sync-m"><i></i><span>بيتوصّل…</span></div><button class="themebtn" data-act="themecycle" type="button" aria-label="تبديل المظهر"></button></div>
     </header>
     <main class="main" id="view" aria-live="polite"><div class="loading" role="status">بيحمّل دفترك…</div></main>
   </div>
@@ -91,6 +92,7 @@
 <script src="config.js"></script>
 <script src="vendor/supabase.js"></script>
 <script src="import.js"></script>
+<script src="xlsx.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
