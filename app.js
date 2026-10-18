@@ -381,7 +381,7 @@ function render(){applyHide();applyTheme();
   if(!S.ready)return;
   scheduleSave();
   var h=S.tab==='home'?viewHome():S.tab==='tx'?viewTx():S.tab==='grp'?viewGroups():S.tab==='ins'?viewInsights():viewPlan();
-  v.innerHTML=h;
+  v.innerHTML=(S.tab==='home'?(welcomeCard()||tipCard('home')):tipCard(S.tab))+h;
   if(S.tab==='tx'){paintTxList();if(S.list.stale&&!S.list.loading)loadList(true);}
 }
 function paintSync(){
@@ -638,6 +638,7 @@ function openCat(c,type){
   S.catEdit=c||null;
   $('#c-title').textContent=c?'تعديل الفئة':(type==='inc'?'مصدر دخل جديد':'فئة جديدة');
   $('#c-err').textContent='';
+  $('#tip-cat').innerHTML=c?'':tipCard('cat');
   $('#c-type').hidden=!!c;
   setCatType(c?c.type:(type||'exp'));
   $('#c-name').value=c?c.name:'';
@@ -723,6 +724,7 @@ function openSheet(t){
   S.editing=t||null;saving=false;delArmed=false;
   $('#sh-title').textContent=t?'تعديل حركة':'حركة جديدة';
   $('#f-err').textContent='';
+  $('#tip-sheet').innerHTML=t?'':tipCard('sheet');
   $('#f-newcat').value='';
   var names=S.win.map(function(x){return x.name;});
   $('#names').innerHTML=uniq(names).slice(0,80).map(function(n){return '<option value="'+esc(n)+'"></option>';}).join('');
@@ -765,12 +767,12 @@ async function submitSheet(again){
     }
     var rec={type:type,amount:Math.round(amt*100)/100,category_id:catId,name:$('#f-name').value.trim().slice(0,100),date:$('#f-date').value||iso(new Date())};
     if(!S.editing)rec.id=uuid();
-    var bb=budgetBefore(rec);
+    var bb=budgetBefore(rec),firstTx=!S.editing&&S.win.length===0;
     var res=await saveTx(rec,S.editing);
     upsertWin(res.tx);dataChanged();
     S.lastCat[type]=catId;
     var bal=budgetAlert(rec,bb);
-    hap();say((res.queued?'اتسجّلت على جهازك وهتترفع لما النت يرجع':(S.editing?'اتعدّلت الحركة':'اتسجّلت الحركة'))+(bal?' — '+bal:''));
+    hap();say((res.queued?'اتسجّلت على جهازك وهتترفع لما النت يرجع':(S.editing?'اتعدّلت الحركة':'اتسجّلت الحركة'))+(bal?' — '+bal:'')+(firstTx?' · تقدر تراجعها وتعدّلها من تبويب الحركات':''));
     saving=false;$('#f-save').disabled=false;
     if(again&&!S.editing){$('#f-amt').value='';$('#f-name').value='';setSheetType(type,catId);$('#f-amt').focus();render();}
     else{closeSheet();render();}
@@ -1114,6 +1116,44 @@ function applyTheme(){
 }
 try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){if(themePref()==='auto')applyTheme();});}catch(e){}
 
+/* ---------- إرشادات أول استخدام (للحسابات الجديدة) ---------- */
+var TIPS={
+ home:['الرئيسية','ده ملخص شهرك: الصافي = دخلك ناقص مصروفك. الرسم بيوريك مصروف آخر 14 يوم، وأيقونة العين بتخفي الأرقام لو حد جنبك.'],
+ tx:['الحركات','هنا كل حركاتك. فلتر بالنوع أو دوّر بالاسم، واضغط على أي حركة عشان تعدّلها أو تحذفها.'],
+ grp:['التجميع','بيوريك فلوسك رايحة فين: مجمّعة بالفئة أو بالاسم، للأسبوع أو الشهر. اضغط على أي فئة تشوف حركاتها.'],
+ ins:['اقتراحات الأسبوع','الاقتراحات بتتحسب من أرقامك إنت، وبتقارن أسبوعك بنفس الأيام من الأسبوع اللي قبله. كل ما تسجّل أكتر بتبقى أدق.'],
+ plan:['الخطة','هنا فئاتك: حط لكل فئة ميزانية شهرية وهتتنبّه لما تقرّب منها. وكمان أهداف التوفير، والاستيراد من Excel، وإعدادات حسابك.'],
+ sheet:['سجّل حركة في ثواني','اكتب المبلغ واختار الفئة وخلاص. التفاصيل اختيارية، ولو الفئة مش موجودة اختار «فئة جديدة» من القايمة.'],
+ cat:['إزاي تظبط الفئة','اكتب اسم الفئة واختار لون. الميزانية الشهرية اختيارية، ولو حطيتها هتتنبّه لما توصل 80% منها.']
+};
+var TIP_KEYS=['home','tx','grp','ins','plan','sheet','cat','welcome'];
+function tipsKey(){return 'masrofy:tips:'+(S.uid||'');}
+function tipsGet(){
+  var m={};if(!S.uid)return m;
+  var raw=LS.get(tipsKey());
+  if(raw){try{(JSON.parse(raw)||[]).forEach(function(k){m[k]=1;});}catch(e){}return m;}
+  if(S.cats.length||S.win.length)TIP_KEYS.forEach(function(k){m[k]=1;});
+  LS.set(tipsKey(),JSON.stringify(Object.keys(m)));
+  return m;
+}
+function tipSeen(k){return !!tipsGet()[k];}
+function tipMark(k){var m=tipsGet();m[k]=1;LS.set(tipsKey(),JSON.stringify(Object.keys(m)));}
+function tipCard(k){
+  if(!TIPS[k]||tipSeen(k))return '';
+  return '<aside class="tip" role="note"><div><b>'+esc(TIPS[k][0])+'</b><p>'+esc(TIPS[k][1])+'</p></div><button class="btn small" type="button" data-act="tipok" data-id="'+k+'">فهمت</button></aside>';
+}
+function welcomeCard(){
+  if(tipSeen('welcome'))return '';
+  var steps=[
+    [S.cats.some(function(c){return !c.archived;}),'ضيف فئاتك','فئات مصروفك (أكل، مواصلات...) ومصادر دخلك.','newcat','exp','أضف فئة'],
+    [S.win.length>0,'سجّل أول حركة','اضغط زرار + واكتب المبلغ.','add','','سجّل حركة'],
+    [S.cats.some(function(c){return c.type==='exp'&&c.budget>0&&!c.archived;}),'حدد ميزانية لأهم فئة','من تبويب الخطة تعدّل أي فئة وتكتب ميزانيتها الشهرية.','tab','plan','افتح الخطة']];
+  if(steps.every(function(s){return s[0];})){tipMark('welcome');return '';}
+  return '<section class="card tip welcome" aria-label="ابدأ من هنا"><h2>أهلًا بيك في دفتر مصروفي</h2><p class="note">ابدأ في 3 خطوات بسيطة:</p><ol class="steps">'+steps.map(function(s,i){
+    return '<li'+(s[0]?' class="done"':'')+'><span class="chkmark" aria-hidden="true">'+(s[0]?'✓':(i+1))+'</span><div><b>'+s[1]+'</b><p class="muted">'+s[2]+'</p>'+(s[0]?'':'<button class="btn small" type="button" data-act="'+s[3]+'"'+(s[4]?' data-v="'+s[4]+'"':'')+'>'+s[5]+'</button>')+'</div></li>';
+  }).join('')+'</ol><button class="btn small" type="button" data-act="tipok" data-id="welcome">إخفاء</button></section>';
+}
+
 /* ---------- إخفاء الأرقام ---------- */
 var HIDE_KEY='masrofy:hide';
 function hideOn(){return LS.get(HIDE_KEY)==='1';}
@@ -1273,6 +1313,7 @@ document.addEventListener('click',function(e){
   else if(a==='csv'){exportCsv();}
   else if(a==='xlsx'){exportXlsx();}
   else if(a==='import'){importPick();}
+  else if(a==='tipok'){tipMark(id);if(id==='sheet')$('#tip-sheet').innerHTML='';else if(id==='cat')$('#tip-cat').innerHTML='';else render();}
   else if(a==='theme'){LS.set(THEME_KEY,b.getAttribute('data-v'));render();}
   else if(a==='themecycle'){LS.set(THEME_KEY,themeIsDark()?'light':'dark');render();}
   else if(a==='hide'){LS.set(HIDE_KEY,hideOn()?'0':'1');render();}

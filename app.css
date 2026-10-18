@@ -254,3 +254,17 @@ td.nm{overflow-wrap:anywhere}
 .themes .btn[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .topr{display:flex;align-items:center;gap:10px}
 .themebtn{width:44px;height:44px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;display:grid;place-items:center;flex:none}
+/* إرشادات أول استخدام */
+.tip{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 14px;margin-bottom:12px;background:var(--accent-soft);border:1px solid var(--line);border-radius:16px}
+.tip[hidden]{display:none}
+.tip b{display:block}
+.tip p{margin:4px 0 0;font-size:13.5px;color:var(--muted)}
+.btn.small{min-height:44px;padding:0 14px;font-size:14px}
+.tip .btn.small{flex:none}
+.welcome{display:block}
+.steps{list-style:none;margin:10px 0;padding:0;display:flex;flex-direction:column;gap:14px}
+.steps li{display:flex;gap:12px;align-items:flex-start}
+.steps .chkmark{flex:none;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:700;font-size:14px}
+.steps li.done .chkmark{background:var(--inc)}
+.steps li.done b{text-decoration:line-through;color:var(--muted)}
+.steps p{margin:2px 0 8px}
