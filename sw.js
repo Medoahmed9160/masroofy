@@ -58,7 +58,7 @@ self.addEventListener('fetch', function (e) {
     var timer = setTimeout(function () {
       fromCache(req).then(function (m) { if (m && !done) { done = true; resolve(m); } });
     }, 3500);
-    fetch(req).then(function (res) {
+    fetch(req, { cache: 'no-cache' }).then(function (res) {
       clearTimeout(timer);
       if (res && res.ok) {
         var copy = res.clone();

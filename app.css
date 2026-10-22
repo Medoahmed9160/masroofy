@@ -268,3 +268,6 @@ td.nm{overflow-wrap:anywhere}
 .steps li.done .chkmark{background:var(--inc)}
 .steps li.done b{text-decoration:line-through;color:var(--muted)}
 .steps p{margin:2px 0 8px}
+.hidebtn{width:44px;height:44px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;display:grid;place-items:center;flex:none}
+.tip.warn{background:var(--warn-soft)}
+.tip .acts{flex:none}

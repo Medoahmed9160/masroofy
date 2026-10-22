@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'">
 <meta name="color-scheme" content="light dark">
+<script src="theme-init.js"></script>
 <title>سياسة الخصوصية - دفتر مصروفي</title>
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="app.css">
@@ -48,7 +49,9 @@ body{padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(32px + env(safe
 
 <h2>حقوقك</h2>
 <ul>
-<li><b>الاطلاع والتصدير:</b> من تبويب الخطة تقدر تنزّل كل حركاتك كملف CSV.</li>
+<li><b>الاطلاع والتصدير:</b> من تبويب الخطة تقدر تنزّل كل حركاتك كملف Excel أو CSV.</li>
+<li><b>الاستيراد:</b> لما تستورد ملف Excel أو CSV، الملف بيتقرا على جهازك ومابيترفعش لأي مكان. المبالغ والحركات اللي توافق عليها بس هي اللي بتتحفظ في حسابك.</li>
+<li><b>تفضيلات الشاشة:</b> المظهر وإخفاء الأرقام والتذكير والإرشادات بتتخزن على جهازك بس، ومش بتتبعت لأي حد.</li>
 <li><b>التعديل:</b> تقدر تعدّل أو تحذف أي حركة أو فئة أو هدف في أي وقت.</li>
 <li><b>حذف الحساب:</b> من تبويب الخطة اضغط "حذف الحساب". بيتمسح حسابك وكل بياناتك نهائيًا، ومينفعش نرجّعها.</li>
 </ul>

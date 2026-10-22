@@ -49,7 +49,14 @@ function toNum(v){
   var s=dig(v).trim();
   if(!s||/[\/:]/.test(s))return null;
   var neg=/^\(.*\)$/.test(s)||/-\s*$/.test(s);
-  s=s.replace(/[(),٬\s]/g,'').replace(/ج\.?م\.?|جنيه|جم|egp|l\.?e\.?|£|\$|ريال|sar|usd/gi,'').replace(/-$/,'');
+  s=s.replace(/[()\s٬]/g,'').replace(/ج\.?م\.?|جنيه|جم|egp|l\.?e\.?|£|\$|ريال|sar|usd/gi,'').replace(/-$/,'');
+  var c=s.lastIndexOf(','),d=s.lastIndexOf('.');
+  if(c>=0&&d>=0){s=c>d?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');}
+  else if(c>=0){
+    if(/^[-+]?\d{1,3}(,\d{3})+$/.test(s))s=s.replace(/,/g,'');
+    else if(/^[-+]?\d+,\d{1,2}$/.test(s))s=s.replace(',','.');
+    else return null;
+  }else if(/^[-+]?\d{1,3}(\.\d{3}){2,}$/.test(s))s=s.replace(/\./g,'');
   if(!/^[-+]?\d+(\.\d+)?$/.test(s))return null;
   var n=Number(s);if(!isFinite(n))return null;
   return neg&&n>0?-n:n;
@@ -161,7 +168,7 @@ async function parseXlsx(buf){
   var d1904=/<workbookPr\b[^>]*date1904="(1|true)"/.test(wb),rid={};
   (rels.match(/<Relationship\b[^>]*>/g)||[]).forEach(function(t){var id=attr(t,'Id'),tg=attr(t,'Target');if(id&&tg)rid[id]=tg.charAt(0)==='/'?tg.slice(1):'xl/'+tg;});
   var sst=[],sx=await zipRead(b,f['xl/sharedStrings.xml']);
-  if(sx){var re=/<si\b[^>]*>([\s\S]*?)<\/si>|<si\b[^>]*\/>/g,m;while((m=re.exec(sx)))sst.push(m[1]?textOf(m[1]):'');}
+  if(sx){var re=/<si\b[^>]*?\/>|<si\b[^>]*>([\s\S]*?)<\/si>/g,m;while((m=re.exec(sx)))sst.push(m[1]?textOf(m[1]):'');}
   var xfDate=[],st=await zipRead(b,f['xl/styles.xml']);
   if(st){
     var codes={};(st.match(/<numFmt\b[^>]*>/g)||[]).forEach(function(t){var id=attr(t,'numFmtId');if(id!=null)codes[id]=attr(t,'formatCode');});
@@ -314,6 +321,7 @@ function buildPlan(rows,sheetName,hrOverride){
 }
 
 /* ---------- استخراج الحركات ---------- */
+function unq(s){return String(s==null?'':s).trim().replace(/^'(?=[=+\-@])/,'');}
 function sheetMonth(name){
   var n=String(name||''),m=monthOf(n),y=/(20\d\d)/.exec(dig(n));
   if(!m&&/^\s*\d{1,2}\s*$/.test(dig(n))&&+dig(n)>=1&&+dig(n)<=12)m=+dig(n);
@@ -336,8 +344,8 @@ function extract(rows,plan,opts){
   var add=function(date,type,amt,name,cat,ri){
     if(!(amt>0)||amt>=1e9){skip('مبلغ مش صالح');return;}
     amt=Math.round(amt*100)/100;
-    var c=String(cat||'').trim().slice(0,40)||(type==='inc'?'دخل آخر':'غير مصنّف');
-    out.records.push({date:date,type:type,amount:amt,name:String(name||'').trim().slice(0,100),cat:c,row:ri+1});
+    var c=unq(cat).slice(0,40)||(type==='inc'?'دخل آخر':'غير مصنّف');
+    out.records.push({date:date,type:type,amount:amt,name:unq(name).slice(0,100),cat:c,row:ri+1});
     if(!out.min||date<out.min)out.min=date;
     if(!out.max||date>out.max)out.max=date;
   };
