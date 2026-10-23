@@ -271,3 +271,14 @@ td.nm{overflow-wrap:anywhere}
 .hidebtn{width:44px;height:44px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;display:grid;place-items:center;flex:none}
 .tip.warn{background:var(--warn-soft)}
 .tip .acts{flex:none}
+
+/* البنود */
+.mhead{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.mhead .muted{grid-column:1;font-size:12.5px}
+.mhead .ramt{grid-column:2;grid-row:1}
+.mhead .meter{grid-column:1/-1}
+.rows li{list-style:none}
+button.mrow.lnk{width:100%;background:none;border:0;border-top:1px solid var(--line);color:inherit;font:inherit;text-align:start;cursor:pointer;min-height:48px}
+.rows li:first-child button.mrow.lnk{border-top:0}
+details.grp .inner button.mrow.lnk:first-child{border-top:0}
+details.grp summary .sm{font-size:12.5px;color:var(--muted)}

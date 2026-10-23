@@ -353,7 +353,8 @@ function textDate(s,sm,yearBase,order){
   return {iso:best.iso,rest:rest};
 }
 function extract(rows,plan,opts){
-  var out={records:[],skipped:{},neg:0,pos:0,min:'',max:'',noDate:false,guessed:0};
+  var out={records:[],skipped:{},dropped:[],neg:0,pos:0,min:'',max:'',noDate:false,guessed:0};
+  var rs=(opts&&opts.restore)||{};
   var skip=function(why){out.skipped[why]=(out.skipped[why]||0)+1;};
   var by={},j;
   plan.cols.forEach(function(c){(by[c.role]=by[c.role]||[]).push(c.i);});
@@ -394,24 +395,40 @@ function extract(rows,plan,opts){
     var li=catC>=0?catC:nameC;
     return (li>=0&&isTotalText(r[li]))||isTotalText(r.filter(function(c){return typeof c==='string';})[0]);
   };
-  /* صف الإجمالي من غير كلمة «إجمالي»: أول (أو آخر) رقم في العمود لو بيساوي مجموع الباقي */
-  var skipCell={};
+  /* صف الإجمالي من غير كلمة «إجمالي»: بنشيله بس لو شكله إجمالي فعلاً:
+     أول (أو آخر) رقم في العمود بيساوي مجموع الباقي، وكل خانات التاريخ والتفاصيل والفئة فيه فاضية.
+     أي حركة ليها تاريخ أو اسم بتفضل زي ما هي حتى لو مبلغها صدفة بيساوي مجموع الباقي. وكل صف بيتشال بيتعرض مبلغه في المعاينة وتقدر ترجّعه. */
+  var skipCell={},labelCols={};
+  [dateC,nameC,catC,typeC].concat(nameCols).forEach(function(k){if(k>=0)labelCols[k]=1;});
+  var hasLabelCols=Object.keys(labelCols).length>0;
+  var blankLabels=function(r){for(var k in labelCols){var c=r[k];if(c!==null&&c!==undefined&&String(c).trim()!=='')return false;}return true;};
   [].concat(by.amount||[],by.exp||[],by.inc||[],cc,ic).forEach(function(x){
     var idx=[];
     for(var r=plan.hr+1;r<rows.length;r++){if(totalRow(rows[r]))continue;var v=toNum(rows[r]&&rows[r][x]);if(v!==null&&v!==0)idx.push(r);}
-    if(idx.length<2)return;
+    if(idx.length<2||!hasLabelCols)return;
     var cands=[idx[0],idx[idx.length-1]];
     for(var k=0;k<2;k++){
       var r0=cands[k],rest=0;
       idx.forEach(function(r){if(r!==r0)rest+=Math.abs(toNum(rows[r][x]));});
-      var nk=nameFor(x),nt=nk>=0?rows[r0][nk]:null;
-      if(Math.abs(Math.abs(toNum(rows[r0][x]))-rest)<0.5&&(idx.length>=4||nt==null||String(nt).trim()==='')){skipCell[r0+':'+x]=1;break;}
+      if(Math.abs(Math.abs(toNum(rows[r0][x]))-rest)<0.5&&blankLabels(rows[r0])){skipCell[r0+':'+x]=1;break;}
     }
   });
+  var dropCell=function(ri,x,amt){
+    var key=ri+':'+x;if(!skipCell[key])return false;
+    var back=!!rs[key];out.dropped.push({key:key,row:ri+1,amount:Math.abs(amt),back:back});
+    if(back)return false;
+    skip('إجمالي (مجموع)');return true;
+  };
+  var amountCols=[].concat(by.amount||[],by.exp||[],by.inc||[],cc,ic);
   for(var ri=plan.hr+1;ri<rows.length;ri++){
     var r=rows[ri];
     if(!r||!r.some(function(c){return c!==null&&c!=='';}))continue;
-    if(totalRow(r)){skip('صف إجمالي');continue;}
+    if(totalRow(r)){
+      var wk=ri+':w',wback=!!rs[wk],wmx=0;
+      amountCols.forEach(function(ci){var n=toNum(r[ci]);if(n!==null&&Math.abs(n)>wmx&&Math.abs(n)<1e9)wmx=Math.abs(n);});
+      if(wmx>0)out.dropped.push({key:wk,row:ri+1,amount:wmx,back:wback,word:true});
+      if(!wback){skip('صف إجمالي');continue;}
+    }
     if(layout==='months'){
       var lab=catC>=0?r[catC]:null;
       if(lab==null||String(lab).trim()===''){continue;}
@@ -435,7 +452,7 @@ function extract(rows,plan,opts){
       var any=false;
       cc.concat(ic).forEach(function(x){
         var v=toNum(r[x]);if(v===null||v===0)return;
-        if(skipCell[ri+':'+x]){skip('إجمالي (مجموع)');any=true;return;}
+        if(dropCell(ri,x,v)){any=true;return;}
         var nk=nameFor(x),nt=nk>=0?r[nk]:'',p=dsel('c'+x,nt);
         any=true;add(p.d,ic.indexOf(x)>=0?'inc':'exp',Math.abs(v),p.rest!==null?p.rest:nt,plan.cols[x].title,ri);
       });
@@ -444,15 +461,15 @@ function extract(rows,plan,opts){
     }
     var nm=nameC>=0?r[nameC]:'',ct=catC>=0?r[catC]:'',p0=dsel('t',nm),nm2=p0.rest!==null?p0.rest:nm;
     if(expC>=0||incC>=0){
-      var e=expC>=0?toNum(r[expC]):null,i2=incC>=0?toNum(r[incC]):null,done=false;
-      if(e&&!skipCell[ri+':'+expC]){add(p0.d,'exp',Math.abs(e),nm2,ct,ri);done=true;}
-      if(i2&&!skipCell[ri+':'+incC]){add(p0.d,'inc',Math.abs(i2),nm2,ct,ri);done=true;}
-      if(!done)skip('صف من غير مبالغ');
+      var e=expC>=0?toNum(r[expC]):null,i2=incC>=0?toNum(r[incC]):null,done=false,dr=false;
+      if(e){if(dropCell(ri,expC,e))dr=true;else{add(p0.d,'exp',Math.abs(e),nm2,ct,ri);done=true;}}
+      if(i2){if(dropCell(ri,incC,i2))dr=true;else{add(p0.d,'inc',Math.abs(i2),nm2,ct,ri);done=true;}}
+      if(!done&&!dr)skip('صف من غير مبالغ');
       continue;
     }
     var v2=toNum(r[amtC]);
     if(v2===null||v2===0){skip('صف من غير مبالغ');continue;}
-    if(skipCell[ri+':'+amtC]){skip('إجمالي (مجموع)');continue;}
+    if(dropCell(ri,amtC,v2))continue;
     if(v2<0)out.neg++;else out.pos++;
     var ty=typeC>=0?typeOf(r[typeC]):null;
     if(!ty){ty=opts.def==='inc'?'inc':opts.def==='sign'?(v2<0?'exp':'inc'):'exp';}
@@ -484,7 +501,7 @@ async function open(file,api){
     if(!sheets.length)throw E('مفيش بيانات في الملف.');
   }catch(e){$('#imp-st').textContent=e&&e.ar?e.message:'مقدرتش أقرا الملف. اتأكد إنه Excel (xlsx) أو CSV.';$('#imp-st').className='err';return;}
   var opts={def:'exp',dateOrder:'dmy',year:new Date().getFullYear()};
-  var S=sheets.map(function(s){return {name:s.name,rows:s.rows,plan:buildPlan(s.rows,s.name),on:true,ex:null};});
+  var S=sheets.map(function(s){return {name:s.name,rows:s.rows,plan:buildPlan(s.rows,s.name),on:true,ex:null,restore:{}};});
   var neg=0,pos=0;
   S.forEach(function(s){var e=extract(s.rows,s.plan,opts);neg+=e.neg;pos+=e.pos;});
   if(neg>0&&pos>0)opts.def='sign';
@@ -515,12 +532,12 @@ async function open(file,api){
     recompute();
   }
   function recompute(){
-    var recs=[],skipped={},mn='',mx='',noDate=false,en=0,ne=0,guessed=0;
+    var recs=[],skipped={},mn='',mx='',noDate=false,en=0,ne=0,guessed=0,drop=[];
     S.forEach(function(s,i){
-      s.ex=extract(s.rows,s.plan,opts);
+      s.ex=extract(s.rows,s.plan,Object.assign({},opts,{restore:s.restore}));
       var n=s.ex.records.length;var el=$('#imp-n'+i);if(el)el.textContent='('+n+' حركة)';
       if(!s.on)return;
-      en++;recs=recs.concat(s.ex.records);guessed+=s.ex.guessed||0;if(s.ex.noDate)noDate=true;
+      en++;recs=recs.concat(s.ex.records);(s.ex.dropped||[]).forEach(function(d){drop.push({i:i,sheet:s.name,d:d});});guessed+=s.ex.guessed||0;if(s.ex.noDate)noDate=true;
       Object.keys(s.ex.skipped).forEach(function(k){skipped[k]=(skipped[k]||0)+s.ex.skipped[k];});
       if(s.ex.min&&(!mn||s.ex.min<mn))mn=s.ex.min;if(s.ex.max&&s.ex.max>mx)mx=s.ex.max;
     });
@@ -534,6 +551,10 @@ async function open(file,api){
     if(guessed)h+='<span class="note">'+guessed+' حركة معندهاش تاريخ واضح في الملاحظات، فاتحسبت بتاريخ آخر حركة فوقها في نفس العمود (أو أول الشهر). راجع المعاينة.</span>';
     var sk=Object.keys(skipped).map(function(k){return k+': '+skipped[k];});
     if(sk.length)h+='<span class="note">اتجاهل: '+esc(sk.join('، '))+'</span>';
+    if(drop.length){
+      h+='<div class="note"><b>صفوف اتعاملت على إنها إجمالي</b><br>راجع المبالغ دي. لو فيها حركة حقيقية علّم عليها وهتتضاف:'+
+        drop.map(function(x){return '<label class="chk"><input type="checkbox" data-rs="'+x.i+'|'+esc(x.d.key)+'"'+(x.d.back?' checked':'')+'><span>'+(S.length>1?esc(x.sheet)+' · ':'')+'صف '+x.d.row+': '+fmN(x.d.amount)+' ج.م</span></label>';}).join('')+'</div>';
+    }
     if(noDate)h+='<span class="note">مفيش عمود تاريخ، فالحركات هتتسجل بتاريخ النهارده. اختار عمود التاريخ من «تعديل الأعمدة» لو موجود.</span>';
     if(recs.length){
       h+='<div class="tblwrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الفئة</th><th>التفاصيل</th></tr></thead><tbody>'+
@@ -548,6 +569,7 @@ async function open(file,api){
     if(t.id==='imp-def'){opts.def=t.value;recompute();}
     else if(t.id==='imp-ord'){opts.dateOrder=t.value;recompute();}
     else if(t.id==='imp-year'){var y=parseInt(dig(t.value),10);if(y>=2000&&y<=2100)opts.year=y;recompute();}
+    else if(t.hasAttribute('data-rs')){var q=t.getAttribute('data-rs').split('|');S[+q[0]].restore[q[1]]=t.checked;recompute();}
     else if(t.hasAttribute('data-on')){S[+t.getAttribute('data-on')].on=t.checked;recompute();}
     else if(t.hasAttribute('data-m')){var p=t.getAttribute('data-m').split(':');S[+p[0]].plan.cols[+p[1]].role=t.value;recompute();}
     else if(t.hasAttribute('data-hr')){
