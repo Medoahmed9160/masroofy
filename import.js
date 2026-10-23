@@ -289,7 +289,9 @@ function buildPlan(rows,sheetName,hrOverride){
   for(j=0;j<maxc;j++)if(!plan.cols[j].role&&st[j].ne>0&&st[j].n>=st[j].ne*0.7)num.push(j);
   if(!has('amount')&&!has('exp')&&!has('inc')){
     var titled=num.filter(function(x){return typeof plan.cols[x].title==='string'&&plan.cols[x].title.trim();});
-    if(num.length>=3&&titled.length===num.length||num.length>=2&&titled.length===num.length&&has('date')){
+    var hasNm=function(x){var l=plan.cols[x-1],r2=plan.cols[x+1];return !!((l&&l.role==='name')||(r2&&r2.role==='name'));};
+    var paired=titled.length===num.length&&num.length>=1&&num.every(hasNm)&&!has('date')&&!has('cat');
+    if(num.length>=3&&titled.length===num.length||num.length>=2&&titled.length===num.length&&has('date')||paired){
       num.forEach(function(x){role(x,hasKw(plan.cols[x].title,KW.inc)?'inccol':'catcol');});
     }else if(num.length===1){role(num[0],'amount');}
     else if(num.length>=2){
@@ -323,24 +325,47 @@ function buildPlan(rows,sheetName,hrOverride){
 /* ---------- استخراج الحركات ---------- */
 function unq(s){return String(s==null?'':s).trim().replace(/^'(?=[=+\-@])/,'');}
 function sheetMonth(name){
-  var n=String(name||''),m=monthOf(n),y=/(20\d\d)/.exec(dig(n));
-  if(!m&&/^\s*\d{1,2}\s*$/.test(dig(n))&&+dig(n)>=1&&+dig(n)<=12)m=+dig(n);
+  var n=String(name||''),dn=dig(n),m=monthOf(n),y=/(20\d\d)/.exec(dn);
+  if(!m&&(/شهر|month/i.test(n)||/^\s*\d{1,2}\s*$/.test(dn))){
+    var rest=dn.replace(/20\d\d/g,' '),re=/(?:^|[^\d])(\d{1,2})(?!\d)/g,x;
+    while((x=re.exec(rest))){var v=+x[1];if(v>=1&&v<=12){m=v;break;}}
+  }
   return {m:m,y:y?+y[1]:0};
 }
+function mDist(y1,m1,y2,m2){return Math.abs((y1*12+m1)-(y2*12+m2));}
+/* بيدوّر على تاريخ جوه نص الملاحظات (زي «لحمه. 26/8») ويختار التفسير الأقرب لشهر الشيت */
+function textDate(s,sm,yearBase,order){
+  var str=String(s==null?'':s),t=dig(str),m=/(\d{1,2})\s*[\/\-]\s*(\d{1,2})(?:\s*[\/\-]\s*(\d{2,4}))?/.exec(t);
+  if(!m)return null;
+  var a=+m[1],b=+m[2],yy=m[3]?(+m[3]<100?2000+ +m[3]:+m[3]):0,cands=[];
+  if(a>12)cands.push([a,b]);else if(b>12)cands.push([b,a]);
+  else{cands.push([a,b],[b,a]);if(order==='mdy')cands.reverse();}
+  var best=null;
+  cands.forEach(function(c){
+    (yy?[yy]:[yearBase-1,yearBase,yearBase+1]).forEach(function(y){
+      var iso=okDate(y,c[1],c[0]);if(!iso)return;
+      var dist=sm.m?mDist(y,c[1],yearBase,sm.m):Math.abs(y-yearBase)*12;
+      if(!best||dist<best.dist)best={iso:iso,dist:dist};
+    });
+  });
+  if(!best||(sm.m&&!yy&&best.dist>2))return null;
+  var rest=(str.slice(0,m.index)+' '+str.slice(m.index+m[0].length)).replace(/\s+/g,' ').replace(/^[\s.,،\-:]+|[\s.,،\-:]+$/g,'');
+  return {iso:best.iso,rest:rest};
+}
 function extract(rows,plan,opts){
-  var out={records:[],skipped:{},neg:0,pos:0,min:'',max:'',noDate:false};
+  var out={records:[],skipped:{},neg:0,pos:0,min:'',max:'',noDate:false,guessed:0};
   var skip=function(why){out.skipped[why]=(out.skipped[why]||0)+1;};
   var by={},j;
   plan.cols.forEach(function(c){(by[c.role]=by[c.role]||[]).push(c.i);});
   var C=function(r){return by[r]&&by[r][0]!==undefined?by[r][0]:-1;};
   var sm=sheetMonth(plan.sheet),year=sm.y||opts.year||new Date().getFullYear();
   var dateC=C('date'),nameC=C('name'),catC=C('cat'),typeC=C('type'),amtC=C('amount'),expC=C('exp'),incC=C('inc');
-  var months=by.month||[],cc=by.catcol||[],ic=by.inccol||[];
+  var months=by.month||[],cc=by.catcol||[],ic=by.inccol||[],nameCols=by.name||[];
   var mval={};
   months.forEach(function(x){var h=plan.cols[x].title,mm=0,yy=0;if(h&&typeof h==='object'){mm=+h.d.slice(5,7);yy=+h.d.slice(0,4);}else{mm=monthOf(h);var y2=/(20\d\d)/.exec(dig(String(h)));yy=y2?+y2[1]:0;}mval[x]=[mm,yy||year];});
   var layout=months.length?'months':(cc.length||ic.length)?'matrix':'table';
   if(layout==='table'&&amtC<0&&expC<0&&incC<0)return out;
-  if(dateC<0&&layout!=='months'){out.noDate=true;}
+  var nameFor=function(x){var best=-1,bd=1e9;nameCols.forEach(function(k){var d=Math.abs(k-x)+(k<x?0.5:0);if(d<bd){bd=d;best=k;}});return best;};
   var add=function(date,type,amt,name,cat,ri){
     if(!(amt>0)||amt>=1e9){skip('مبلغ مش صالح');return;}
     amt=Math.round(amt*100)/100;
@@ -349,18 +374,44 @@ function extract(rows,plan,opts){
     if(!out.min||date<out.min)out.min=date;
     if(!out.max||date>out.max)out.max=date;
   };
+  function iso(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
   var rowDate=function(r){
-    if(dateC<0)return {d:iso(new Date()),ok:true};
     var v=r[dateC],d=parseDate(v,opts.dateOrder);
     if(!d&&sm.m){var dn=toNum(v);if(dn!==null&&Number.isInteger(dn)&&dn>=1&&dn<=31)d=okDate(year,sm.m,dn);}
     return {d:d,ok:!!d};
   };
-  function iso(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+  var lastD={};
+  var pickDate=function(key,text){
+    var td=textDate(text,sm,year,opts.dateOrder);
+    if(td){lastD[key]=td.iso;return {d:td.iso,rest:td.rest,g:false};}
+    if(lastD[key])return {d:lastD[key],rest:null,g:true};
+    var f=sm.m?okDate(year,sm.m,1):null;
+    if(f)return {d:f,rest:null,g:true};
+    out.noDate=true;return {d:iso(new Date()),rest:null,g:true};
+  };
+  var totalRow=function(r){
+    if(!r)return false;
+    var li=catC>=0?catC:nameC;
+    return (li>=0&&isTotalText(r[li]))||isTotalText(r.filter(function(c){return typeof c==='string';})[0]);
+  };
+  /* صف الإجمالي من غير كلمة «إجمالي»: أول (أو آخر) رقم في العمود لو بيساوي مجموع الباقي */
+  var skipCell={};
+  [].concat(by.amount||[],by.exp||[],by.inc||[],cc,ic).forEach(function(x){
+    var idx=[];
+    for(var r=plan.hr+1;r<rows.length;r++){if(totalRow(rows[r]))continue;var v=toNum(rows[r]&&rows[r][x]);if(v!==null&&v!==0)idx.push(r);}
+    if(idx.length<2)return;
+    var cands=[idx[0],idx[idx.length-1]];
+    for(var k=0;k<2;k++){
+      var r0=cands[k],rest=0;
+      idx.forEach(function(r){if(r!==r0)rest+=Math.abs(toNum(rows[r][x]));});
+      var nk=nameFor(x),nt=nk>=0?rows[r0][nk]:null;
+      if(Math.abs(Math.abs(toNum(rows[r0][x]))-rest)<0.5&&(idx.length>=4||nt==null||String(nt).trim()==='')){skipCell[r0+':'+x]=1;break;}
+    }
+  });
   for(var ri=plan.hr+1;ri<rows.length;ri++){
     var r=rows[ri];
     if(!r||!r.some(function(c){return c!==null&&c!=='';}))continue;
-    var lblIdx=catC>=0?catC:nameC;
-    if((lblIdx>=0&&isTotalText(r[lblIdx]))||isTotalText(r.filter(function(c){return typeof c==='string';})[0])){skip('صف إجمالي');continue;}
+    if(totalRow(r)){skip('صف إجمالي');continue;}
     if(layout==='months'){
       var lab=catC>=0?r[catC]:null;
       if(lab==null||String(lab).trim()===''){continue;}
@@ -374,31 +425,38 @@ function extract(rows,plan,opts){
       });
       continue;
     }
-    var D=rowDate(r);
-    if(!D.ok){skip('تاريخ ناقص أو مش مفهوم');continue;}
+    var D=dateC>=0?rowDate(r):null;
+    if(D&&!D.ok){skip('تاريخ ناقص أو مش مفهوم');continue;}
+    var dsel=function(key,text){
+      if(D)return {d:D.d,rest:null};
+      var p=pickDate(key,text);if(p.g)out.guessed++;return p;
+    };
     if(layout==='matrix'){
       var any=false;
       cc.concat(ic).forEach(function(x){
         var v=toNum(r[x]);if(v===null||v===0)return;
-        any=true;add(D.d,ic.indexOf(x)>=0?'inc':'exp',Math.abs(v),nameC>=0?r[nameC]:'',plan.cols[x].title,ri);
+        if(skipCell[ri+':'+x]){skip('إجمالي (مجموع)');any=true;return;}
+        var nk=nameFor(x),nt=nk>=0?r[nk]:'',p=dsel('c'+x,nt);
+        any=true;add(p.d,ic.indexOf(x)>=0?'inc':'exp',Math.abs(v),p.rest!==null?p.rest:nt,plan.cols[x].title,ri);
       });
       if(!any)skip('صف من غير مبالغ');
       continue;
     }
-    var nm=nameC>=0?r[nameC]:'',ct=catC>=0?r[catC]:'';
+    var nm=nameC>=0?r[nameC]:'',ct=catC>=0?r[catC]:'',p0=dsel('t',nm),nm2=p0.rest!==null?p0.rest:nm;
     if(expC>=0||incC>=0){
       var e=expC>=0?toNum(r[expC]):null,i2=incC>=0?toNum(r[incC]):null,done=false;
-      if(e){add(D.d,'exp',Math.abs(e),nm,ct,ri);done=true;}
-      if(i2){add(D.d,'inc',Math.abs(i2),nm,ct,ri);done=true;}
+      if(e&&!skipCell[ri+':'+expC]){add(p0.d,'exp',Math.abs(e),nm2,ct,ri);done=true;}
+      if(i2&&!skipCell[ri+':'+incC]){add(p0.d,'inc',Math.abs(i2),nm2,ct,ri);done=true;}
       if(!done)skip('صف من غير مبالغ');
       continue;
     }
     var v2=toNum(r[amtC]);
     if(v2===null||v2===0){skip('صف من غير مبالغ');continue;}
+    if(skipCell[ri+':'+amtC]){skip('إجمالي (مجموع)');continue;}
     if(v2<0)out.neg++;else out.pos++;
     var ty=typeC>=0?typeOf(r[typeC]):null;
     if(!ty){ty=opts.def==='inc'?'inc':opts.def==='sign'?(v2<0?'exp':'inc'):'exp';}
-    add(D.d,ty,Math.abs(v2),nm,ct,ri);
+    add(p0.d,ty,Math.abs(v2),nm2,ct,ri);
   }
   return out;
 }
@@ -457,12 +515,12 @@ async function open(file,api){
     recompute();
   }
   function recompute(){
-    var recs=[],skipped={},mn='',mx='',noDate=false,en=0,ne=0;
+    var recs=[],skipped={},mn='',mx='',noDate=false,en=0,ne=0,guessed=0;
     S.forEach(function(s,i){
       s.ex=extract(s.rows,s.plan,opts);
       var n=s.ex.records.length;var el=$('#imp-n'+i);if(el)el.textContent='('+n+' حركة)';
       if(!s.on)return;
-      en++;recs=recs.concat(s.ex.records);if(s.ex.noDate)noDate=true;
+      en++;recs=recs.concat(s.ex.records);guessed+=s.ex.guessed||0;if(s.ex.noDate)noDate=true;
       Object.keys(s.ex.skipped).forEach(function(k){skipped[k]=(skipped[k]||0)+s.ex.skipped[k];});
       if(s.ex.min&&(!mn||s.ex.min<mn))mn=s.ex.min;if(s.ex.max&&s.ex.max>mx)mx=s.ex.max;
     });
@@ -470,6 +528,10 @@ async function open(file,api){
     var sum=function(l){return l.reduce(function(a,r){return a+r.amount;},0);};
     var h='<b>'+recs.length+' حركة جاهزة</b>';
     if(recs.length)h+='<span class="muted">'+ex.length+' مصروف بإجمالي '+fmN(sum(ex))+' ج.م، و'+ic.length+' دخل بإجمالي '+fmN(sum(ic))+' ج.م. من '+mn+' إلى '+mx+'.</span>';
+    var cats={};recs.forEach(function(r){cats[r.cat]=(cats[r.cat]||0)+r.amount;});
+    var cl=Object.keys(cats).sort(function(a,b){return cats[b]-cats[a];}).slice(0,8).map(function(k){return k+': '+fmN(cats[k]);});
+    if(cl.length>1||(cl.length===1&&recs.length>1))h+='<span class="muted">إجمالي كل فئة: '+esc(cl.join(' · '))+'. قارنهم بأرقام ملفك.</span>';
+    if(guessed)h+='<span class="note">'+guessed+' حركة معندهاش تاريخ واضح في الملاحظات، فاتحسبت بتاريخ آخر حركة فوقها في نفس العمود (أو أول الشهر). راجع المعاينة.</span>';
     var sk=Object.keys(skipped).map(function(k){return k+': '+skipped[k];});
     if(sk.length)h+='<span class="note">اتجاهل: '+esc(sk.join('، '))+'</span>';
     if(noDate)h+='<span class="note">مفيش عمود تاريخ، فالحركات هتتسجل بتاريخ النهارده. اختار عمود التاريخ من «تعديل الأعمدة» لو موجود.</span>';
