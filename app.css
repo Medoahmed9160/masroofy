@@ -282,3 +282,8 @@ button.mrow.lnk{width:100%;background:none;border:0;border-top:1px solid var(--l
 .rows li:first-child button.mrow.lnk{border-top:0}
 details.grp .inner button.mrow.lnk:first-child{border-top:0}
 details.grp summary .sm{font-size:12.5px;color:var(--muted)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch}
+.chip{flex:none;display:flex;flex-direction:column;gap:2px;align-items:flex-start;min-width:96px;padding:9px 13px;border:1px solid var(--line);background:var(--surface);border-radius:14px;color:inherit;font:inherit;font-size:13px;cursor:pointer;text-align:start}
+.chip b{font-weight:500}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+input.search{width:100%;min-height:46px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:0 14px}

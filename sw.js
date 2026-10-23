@@ -2,7 +2,7 @@
    بيحفظ ملفات التطبيق على الجهاز علشان يفتح من غير إنترنت.
    الشبكة أولًا (علشان التحديثات توصل)، ولو النت وقع أو بطيء بنرجع للنسخة المحفوظة.
    مبنلمسش أي طلب لـ Supabase: البيانات بتتخزن من جوه التطبيق نفسه. */
-var CACHE = 'masrofy-shell-v2';
+var CACHE = 'masrofy-shell-v3';
 var FILES = [
   './', 'index.html', 'app.css', 'fonts.css', 'app.js', 'import.js', 'xlsx.js', 'theme-init.js', 'config.js',
   'vendor/supabase.js', 'manifest.webmanifest',

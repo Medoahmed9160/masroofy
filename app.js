@@ -40,7 +40,7 @@ function hap(){try{var H=plug('Haptics');if(H&&H.impact)H.impact({style:'LIGHT'}
 var S={sb:null,uid:null,email:'',ready:false,started:false,recovering:false,tab:'home',
   cats:[],cmap:{},goals:[],win:[],
   list:{items:[],loading:false,done:false,stale:true,type:'all',cat:'',q:'',tok:0,err:false},
-  gView:'months',gItem:null,gAll:null,gAllBusy:false,openGrp:{},iOff:0,sync:'warn',
+  gView:'items',gItem:null,gMon:'',gAll:null,gAllBusy:false,openGrp:{},iOff:0,sync:'warn',
   editing:null,sheetType:'exp',lastCat:{},catEdit:null,catType:'exp',catColor:0,delOpen:false,
   authMode:'in',authEmail:'',fails:0,lockUntil:0,resendAt:0,fromCache:false,lockAvail:false};
 
@@ -276,25 +276,32 @@ function allTxMerged(){
   S.win.concat((S.gAll&&S.gAll.tx)||[]).forEach(function(t){if(!seen[t.id]){seen[t.id]=1;out.push(t);}});
   return out;
 }
-function itemRowDate(t){
-  return '<button type="button" class="tx" data-act="edit" data-id="'+esc(t.id)+'"><span class="sg" aria-hidden="true">−</span><span class="t1">'+esc(dt(parseIso(t.date),{weekday:'long',day:'numeric',month:'long'}))+'</span><span class="am n">−'+fm(t.amount)+'</span><span class="t2">'+(t.name?esc(cname(t)):'')+'</span></button>';
-}
-function itemPage(list){
-  list.sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:(a.created_at<b.created_at?1:a.created_at>b.created_at?-1:0);});
-  var t0=list[0],label=t0.name||cname(t0),tot=sum(list),mm={},keys=[],mx=0;
+function gFilter(q){q=norm(q);document.querySelectorAll('#view [data-s]').forEach(function(li){li.hidden=!!q&&li.getAttribute('data-s').indexOf(q)<0;});}
+function sortTx(list){return list.sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:(a.created_at<b.created_at?1:a.created_at>b.created_at?-1:0);});}
+/* صفحة بند أو فئة: إجمالي كل الشهور + شريط شهور تختار منه + حركات الشهر */
+function itemPage(list,isCat){
+  sortTx(list);
+  var t0=list[0],label=isCat?cname(t0):(t0.name||cname(t0)),tot=sum(list),mm={},keys=[],mx=0;
   list.forEach(function(t){var k=t.date.slice(0,7);if(!mm[k]){mm[k]={total:0,items:[]};keys.push(k);}mm[k].total+=t.amount;mm[k].items.push(t);});
   keys.forEach(function(k){if(mm[k].total>mx)mx=mm[k].total;});
-  var h='<button class="btn small" type="button" data-act="gback">← كل البنود</button>'+
-    '<div class="head"><h1>'+esc(label)+'</h1><p class="sub"><span class="tag"><i class="dot" style="background:'+ccolor(t0.category_id)+'"></i>'+esc(cname(t0))+'</span></p></div>'+
-    '<p class="card" style="flex-direction:row;justify-content:space-between;flex-wrap:wrap;gap:8px"><span>إجمالي البند '+money(tot)+'</span><span class="muted"><span class="n">'+list.length+'</span> حركة · متوسط <span class="n">'+fm(tot/list.length)+'</span> ج.م · <span class="n">'+keys.length+'</span> شهر</span></p>';
-  keys.forEach(function(k){
+  if(S.gMon&&!mm[S.gMon])S.gMon='';
+  var row=function(t){
+    var d=esc(dt(parseIso(t.date),{weekday:'long',day:'numeric',month:'long'})),nm=esc(t.name||cname(t));
+    return '<button type="button" class="tx" data-act="edit" data-id="'+esc(t.id)+'"><span class="sg" aria-hidden="true">−</span><span class="t1">'+(isCat?nm:d)+'</span><span class="am n">−'+fm(t.amount)+'</span><span class="t2">'+(isCat?d:'')+'</span></button>';
+  };
+  var h='<button class="btn small" type="button" data-act="gback">← '+(isCat?'كل الفئات':'كل البنود')+'</button>'+
+    '<div class="head"><h1>'+esc(label)+'</h1>'+(isCat?'':'<p class="sub"><span class="tag"><i class="dot" style="background:'+ccolor(t0.category_id)+'"></i>'+esc(cname(t0))+'</span></p>')+'</div>'+
+    '<section class="card"><span class="muted">إجمالي '+(isCat?'الفئة':'البند')+' في كل الشهور</span><p class="hero-num" style="font-size:30px">'+N(tot)+'<span class="cur">ج.م</span></p><span class="muted"><span class="n">'+list.length+'</span> حركة · <span class="n">'+keys.length+'</span> شهر · متوسط الشهر <span class="n">'+fm(tot/keys.length)+'</span> ج.م</span></section>'+
+    '<div class="chips" role="group" aria-label="الشهر"><button type="button" class="chip" data-act="gmon" data-v="" aria-pressed="'+(!S.gMon)+'"><b>كل الشهور</b><span class="n">'+fm(tot)+'</span></button>'+
+    keys.map(function(k){return '<button type="button" class="chip" data-act="gmon" data-v="'+k+'" aria-pressed="'+(S.gMon===k)+'"><b>'+esc(monthLab(k))+'</b><span class="n">'+fm(mm[k].total)+'</span></button>';}).join('')+'</div>';
+  (S.gMon?[S.gMon]:keys).forEach(function(k){
     var m=mm[k];
-    h+='<section class="card"><div class="mhead"><b>'+esc(monthLab(k))+'</b><span class="ramt">'+money(m.total)+'</span><span class="muted"><span class="n">'+m.items.length+'</span> حركة</span><div class="meter"><i style="width:'+(mx>0?m.total/mx*100:0)+'%"></i></div></div>'+m.items.map(itemRowDate).join('')+'</section>';
+    h+='<section class="card"><div class="mhead"><b>'+esc(monthLab(k))+'</b><span class="ramt">'+money(m.total)+'</span><span class="muted"><span class="n">'+m.items.length+'</span> حركة'+(tot>0?' · <span class="n">'+Math.round(m.total/tot*100)+'%</span> من الإجمالي':'')+'</span><div class="meter"><i style="width:'+(mx>0?m.total/mx*100:0)+'%"></i></div></div>'+m.items.map(row).join('')+'</section>';
   });
   return h;
 }
 function viewGroups(){
-  var h='<div class="head"><h1>البنود</h1><p class="sub">كل بند بحركاته، وإجمالي مصروف كل شهر</p></div>';
+  var h='<div class="head"><h1>البنود</h1><p class="sub">اختار بند أو فئة وشوف مصروفه كل شهر</p></div>';
   if(!S.gAll){
     if(!S.gAllBusy)setTimeout(loadGAll,0);
     return h+'<div class="loading" role="status">بيحسب…</div>';
@@ -302,19 +309,22 @@ function viewGroups(){
   var all=allTxMerged(),exp=ofType(all,'exp');
   if(S.gAll.err)h+='<aside class="tip warn" role="note"><div><b>مقدرتش أحمّل كل الشهور</b><p>المعروض هنا آخر شهرين بس. اتأكد من النت وجرّب تاني.</p></div><button class="btn small" data-act="gretry" type="button">جرّب تاني</button></aside>';
   if(S.gItem){
-    var one=exp.filter(function(t){return itemKey(t)===S.gItem;});
-    if(one.length)return h+itemPage(one);
-    S.gItem=null;
+    var isCat=S.gItem.slice(0,2)==='c:',key=S.gItem.slice(2);
+    var one=exp.filter(function(t){return isCat?t.category_id===key:itemKey(t)===key;});
+    if(one.length)return h+itemPage(one,isCat);
+    S.gItem=null;S.gMon='';
   }
-  if(!exp.length)return h+'<div class="empty"><h2>مفيش مصاريف لسه</h2><p class="muted">سجّل مصاريفك وهتلاقي هنا كل بند بحركاته وإجمالي كل شهر. استخدم نفس الاسم للحاجة المتكررة (مثلاً: قهوة) عشان تتجمع صح.</p></div>';
-  h+='<div class="bar-line"><div class="seg" role="group" aria-label="طريقة العرض">'+[['months','الشهور'],['items','البنود']].map(function(x){return '<button type="button" data-act="gview" data-v="'+x[0]+'" aria-pressed="'+(S.gView===x[0])+'">'+x[1]+'</button>';}).join('')+'</div></div>';
+  if(!exp.length)return h+'<div class="empty"><h2>مفيش مصاريف لسه</h2><p class="muted">سجّل مصاريفك وهتلاقي هنا كل بند وفئة بحركاته وإجمالي كل شهر. استخدم نفس الاسم للحاجة المتكررة (مثلاً: قهوة) عشان تتجمع صح.</p></div>';
+  h+='<div class="bar-line"><div class="seg" role="group" aria-label="طريقة العرض">'+[['items','البنود'],['cats','الفئات'],['months','الشهور']].map(function(x){return '<button type="button" data-act="gview" data-v="'+x[0]+'" aria-pressed="'+(S.gView===x[0])+'">'+x[1]+'</button>';}).join('')+'</div></div>';
   var tot=sum(exp);
-  if(S.gView==='items'){
-    var mg=mergeByName(exp);
-    h+='<p class="card" style="flex-direction:row;justify-content:space-between;flex-wrap:wrap;gap:8px"><span>إجمالي كل المصروفات '+money(tot)+'</span><span class="muted"><span class="n">'+mg.length+'</span> بند · <span class="n">'+exp.length+'</span> حركة</span></p>';
-    return h+'<section class="card"><ul class="rows">'+mg.map(function(g){
-      var key=norm(g.label)+'|'+g.catId;
-      return '<li><button type="button" class="mrow lnk" data-act="gitem" data-id="'+esc(key)+'"><span class="rname">'+esc(g.label)+'</span><span class="ramt">'+money(g.total)+'</span><span class="sm"><span class="tag"><i class="dot" style="background:'+ccolor(g.catId)+'"></i>'+esc(g.cat)+'</span><span class="tag'+(g.count>=3?' rep':'')+'">×<span class="n">'+g.count+'</span></span><span>متوسط <span class="n">'+fm(g.total/g.count)+'</span></span></span></button></li>';
+  if(S.gView==='items'||S.gView==='cats'){
+    var isC=S.gView==='cats',rowsL;
+    if(isC){rowsL=byCat(exp).map(function(c){return {id:'c:'+c.id,label:c.name,total:c.total,count:c.count,catId:c.id,cat:''};});}
+    else{rowsL=mergeByName(exp).map(function(g){return {id:'i:'+norm(g.label)+'|'+g.catId,label:g.label,total:g.total,count:g.count,catId:g.catId,cat:g.cat};});}
+    h+='<p class="card" style="flex-direction:row;justify-content:space-between;flex-wrap:wrap;gap:8px"><span>إجمالي كل المصروفات '+money(tot)+'</span><span class="muted"><span class="n">'+rowsL.length+'</span> '+(isC?'فئة':'بند')+' · <span class="n">'+exp.length+'</span> حركة</span></p>'+
+      '<input type="text" id="g-q" class="search" placeholder="ابحث عن '+(isC?'فئة':'بند')+'" autocomplete="off" maxlength="60" aria-label="بحث">';
+    return h+'<section class="card"><ul class="rows">'+rowsL.map(function(g){
+      return '<li data-s="'+esc(norm(g.label+' '+g.cat))+'"><button type="button" class="mrow lnk" data-act="gitem" data-id="'+esc(g.id)+'"><span class="rname"><i class="dot" style="background:'+ccolor(g.catId)+'"></i> '+esc(g.label)+'</span><span class="ramt">'+money(g.total)+'</span><span class="sm">'+(g.cat?'<span class="tag">'+esc(g.cat)+'</span>':'')+'<span class="tag'+(g.count>=3?' rep':'')+'">×<span class="n">'+g.count+'</span></span><span>متوسط <span class="n">'+fm(g.total/g.count)+'</span></span></span></button></li>';
     }).join('')+'</ul></section>';
   }
   var months={},keys=[],mx=0,curK=iso(new Date()).slice(0,7);
@@ -325,7 +335,7 @@ function viewGroups(){
   keys.forEach(function(k){
     var m=months[k],kk='m:'+k,mg2=mergeByName(m.exp);
     h+='<details class="grp" data-k="'+esc(kk)+'"'+((S.openGrp[kk]!==undefined?S.openGrp[kk]:k===curK)?' open':'')+'><summary><span class="rname">'+esc(monthLab(k))+(k===curK?' <span class="tag">الشهر ده</span>':'')+'</span><span class="ramt">'+money(m.total)+'</span><span class="sm" style="grid-column:1/-1"><span class="n">'+m.exp.length+'</span> حركة'+(m.inc>0?' · دخل '+money(m.inc):'')+'</span><div class="meter" style="grid-column:1/-1"><i style="width:'+(mx>0?m.total/mx*100:0)+'%"></i></div></summary><div class="inner">'+
-      (mg2.length?mg2.map(function(g){var key=norm(g.label)+'|'+g.catId;return '<button type="button" class="mrow lnk" data-act="gitem" data-id="'+esc(key)+'"><span class="rname">'+esc(g.label)+'</span><span class="ramt">'+money(g.total)+'</span><span class="sm"><span class="tag"><i class="dot" style="background:'+ccolor(g.catId)+'"></i>'+esc(g.cat)+'</span>'+(g.count>1?'<span class="tag">×<span class="n">'+g.count+'</span></span>':'')+'</span></button>';}).join(''):'<p class="muted" style="padding:8px 0">مفيش مصاريف في الشهر ده.</p>')+'</div></details>';
+      (mg2.length?mg2.map(function(g){var key='i:'+norm(g.label)+'|'+g.catId;return '<button type="button" class="mrow lnk" data-act="gitem" data-id="'+esc(key)+'"><span class="rname">'+esc(g.label)+'</span><span class="ramt">'+money(g.total)+'</span><span class="sm"><span class="tag"><i class="dot" style="background:'+ccolor(g.catId)+'"></i>'+esc(g.cat)+'</span>'+(g.count>1?'<span class="tag">×<span class="n">'+g.count+'</span></span>':'')+'</span></button>';}).join(''):'<p class="muted" style="padding:8px 0">مفيش مصاريف في الشهر ده.</p>')+'</div></details>';
   });
   return h;
 }
@@ -1165,7 +1175,7 @@ try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',
 var TIPS={
  home:['الرئيسية','ده ملخص شهرك: الصافي = دخلك ناقص مصروفك. الرسم بيوريك مصروف آخر 14 يوم، وأيقونة العين بتخفي الأرقام لو حد جنبك.'],
  tx:['الحركات','هنا كل حركاتك. فلتر بالنوع أو دوّر بالاسم، واضغط على أي حركة عشان تعدّلها أو تحذفها.'],
- grp:['البنود','«الشهور» بتوريك إجمالي مصروف كل شهر، و«البنود» بتوريك كل بند (قهوة، بنزين...) بكل حركاته. اضغط على أي بند تشوف حركاته شهر بشهر، واضغط على أي حركة تعدّلها.'],
+ grp:['البنود','اختار «البنود» أو «الفئات» وبعدين اضغط على اللي عايزه: هتشوف إجماليه في كل الشهور، واختار أي شهر تشوف مصروفه لوحده. «الشهور» بتوريك إجمالي كل شهر. واضغط على أي حركة تعدّلها.'],
  ins:['اقتراحات الأسبوع','الاقتراحات بتتحسب من أرقامك إنت، وبتقارن أسبوعك بنفس الأيام من الأسبوع اللي قبله. كل ما تسجّل أكتر بتبقى أدق.'],
  plan:['الخطة','هنا فئاتك: حط لكل فئة ميزانية شهرية وهتتنبّه لما تقرّب منها. وكمان أهداف التوفير، والاستيراد من Excel، وإعدادات حسابك.'],
  sheet:['سجّل حركة في ثواني','اكتب المبلغ واختار الفئة وخلاص. لازم يكون رصيدك (دخلك ناقص مصروفك لحد النهارده) يغطي المصروف. التفاصيل اختيارية، ولو الفئة مش موجودة اختار «فئة جديدة» من القايمة.'],
@@ -1406,7 +1416,7 @@ function resetState(){
   remCancel();
   if(S.sb&&chan){try{S.sb.removeChannel(chan);}catch(e){}}chan=null;
   S.cats=[];S.cmap={};S.goals=[];S.win=[];S.list={items:[],loading:false,done:false,stale:true,type:'all',cat:'',q:'',tok:0,err:false};
-  S.ready=false;S.started=false;S.uid=null;S.email='';S.tab='home';S.gAll=null;S.gItem=null;notifTried=false;S.delOpen=false;S.sync='warn';paintSync();
+  S.ready=false;S.started=false;S.uid=null;S.email='';S.tab='home';S.gAll=null;S.gItem=null;S.gMon='';notifTried=false;S.delOpen=false;S.sync='warn';paintSync();
   $('#ov').hidden=true;$('#ov2').hidden=true;
 }
 async function refreshAll(){
@@ -1430,14 +1440,15 @@ document.addEventListener('click',function(e){
   if(!b){var sw=e.target.closest('.sw');if(sw){S.catColor=Number(sw.getAttribute('data-col'));paintSwatches();}return;}
   var a=b.getAttribute('data-act'),v=b.getAttribute('data-v'),id=b.getAttribute('data-id');
   if(a==='add'){if(S.ready){if(!S.cats.length){openCat(null,'exp');return;}openSheet(null);}}
-  else if(a==='tab'){if(v==='grp'&&S.tab==='grp')S.gItem=null;S.tab=v;render();window.scrollTo(0,0);}
+  else if(a==='tab'){if(v==='grp'&&S.tab==='grp'){S.gItem=null;S.gMon='';}S.tab=v;render();window.scrollTo(0,0);}
   else if(a==='edit'){var t=S.list.items.filter(function(x){return x.id===id;})[0]||S.win.filter(function(x){return x.id===id;})[0]||allTxMerged().filter(function(x){return x.id===id;})[0];if(t)openSheet(t);}
   else if(a==='ftype'){S.list.type=v;loadList(true);render();}
   else if(a==='more'){loadList(false);}
   else if(a==='retrylist'){loadList(true);}
   else if(a==='gview'){S.gView=v;render();}
-  else if(a==='gitem'){S.gItem=id;render();window.scrollTo(0,0);}
-  else if(a==='gback'){S.gItem=null;render();window.scrollTo(0,0);}
+  else if(a==='gitem'){S.gItem=id;S.gMon='';render();window.scrollTo(0,0);}
+  else if(a==='gmon'){S.gMon=v||'';render();}
+  else if(a==='gback'){S.gItem=null;S.gMon='';render();window.scrollTo(0,0);}
   else if(a==='notif-yes'){notifAnswer(true);}
   else if(a==='notif-no'){notifAnswer(false);}
   else if(a==='gretry'){S.gAll=null;render();}
@@ -1481,6 +1492,7 @@ document.addEventListener('change',function(e){
 });
 document.addEventListener('input',function(e){
   var id=e.target.id;
+  if(id==='g-q'){gFilter(e.target.value);return;}
   if(id==='f-q'){S.list.q=e.target.value.trim();clearTimeout(qTimer);qTimer=setTimeout(function(){loadList(true);},350);}
   else if(id==='a-pass'||id==='a-mail'){if(document.querySelector('#a-rules'))updateRules();}
   else if(id==='del-confirm'){var g=$('#del-go');if(g)g.disabled=e.target.value.trim()!=='حذف';}
